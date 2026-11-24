@@ -93,6 +93,10 @@
   .notiz p{margin:0;font-family:"Patrick Hand",cursive;font-size:1.2rem;line-height:1.25}
   .notiz ul{list-style:none;padding:0;margin:8px 0 0;font-size:.82rem;line-height:1.7;opacity:.85}
 
+  .sprachen{display:flex;gap:8px}
+  .sprachen[hidden]{display:none}
+  .flach.sprache[aria-pressed="true"]{background:var(--auf,#221E18);color:var(--akzent,#fff)}
+
   .liedtext{
     width:min(440px,88vw);max-height:42vh;overflow-y:auto;
     background:rgba(255,253,246,.92);color:#221E18;border-radius:8px;
@@ -171,6 +175,7 @@
   <div class="karteli" id="karteli"></div>
   <h2 id="titel"></h2>
   <div class="nr" id="mbNr" hidden></div>
+  <div class="sprachen" id="sprachen" hidden></div>
   <div class="notiz" id="notiz" hidden>
     <p id="notizText"></p>
     <ul id="notizListe"></ul>
@@ -192,7 +197,7 @@
   <summary>Lieder-Dateien</summary>
   <p class="hinweis">Lege die MP3s in den Ordner <code>lieder</code> neben die App-Datei – genau unter diesen Namen:</p>
   <ul class="dateien" id="dateiliste"></ul>
-  <p class="hinweis">Optional: Liedtext als Textdatei mit gleichem Namen, z. B. <code>nur-mit-einer-schlinge.txt</code> im selben Ordner. Gibt es sie, erscheint beim Treffer der Knopf «Text anzeigen».</p>
+  <p class="hinweis">Optional: Liedtext als Textdatei mit gleichem Namen, z. B. <code>nur-mit-einer-schlinge.txt</code> im selben Ordner. Gibt es sie, erscheint beim Treffer der Knopf «Text anzeigen». Bei Liedern in mehreren Sprachen gilt das Kürzel auch für den Text, z. B. <code>fryd-fryd-fryd-no.txt</code>.</p>
   <div class="feld">
     <label for="bucketInput">Optional: Firebase Storage Bucket</label>
     <input id="bucketInput" type="text" inputmode="url" placeholder="leer lassen für den Ordner „lieder“">
@@ -251,14 +256,16 @@ const ZEICHNUNGEN = {
 
 const LIEDER = [
   {t:"Nur mit einer Schlinge",        mb:"MB 351", c:"#A8D8A0", dark:false, svg:"schleuder"},
-  {t:"Bau Gottes Rich",               mb:"",       c:"#EE5C8F", dark:false, svg:"mauer"},
+  {t:"Bau Gottes Rich",               mb:"",       c:"#EE5C8F", dark:false, svg:"mauer",
+   fassungen:[["de","Deutsch"],["no","Norsk"]]},
   {t:"Für Jesus, für Jesus",          mb:"MB 250", c:"#F6C324", dark:false, icon:"☀️"},
   {t:"Wenn de Sturm tobt",            mb:"MB 228", c:"#5B3B96", dark:true,  icon:"⛈️"},
   {t:"Das Fischlein in dem Wasser",   mb:"",       c:"#2F4FA2", dark:true,  icon:"🐟"},
   {t:"Mis Schiffli isch chli",        mb:"",       c:"#17734B", dark:true,  icon:"⛵"},
   {t:"Was ich will, das weiss ich",   mb:"",       c:"#63BB46", dark:false, icon:"👣"},
   {t:"Immer fröhlich",                mb:"MB 352", c:"#DF3B2C", dark:true,  icon:"😄"},
-  {t:"Fryd, Fryd, Fryd",              mb:"MB 211", c:"#F2ED8F", dark:false, icon:"😊"},
+  {t:"Fryd, Fryd, Fryd",              mb:"MB 211", c:"#F2ED8F", dark:false, icon:"😊",
+   fassungen:[["de","Deutsch"],["no","Norsk"]]},
   {t:"Min Gott isch so gross",        mb:"",       c:"#F0761F", dark:false, icon:"🙌"},
   {t:"Bi üs, do i dä Gmeind",         mb:"",       c:"#F4B2C4", dark:false, icon:"👪"},
   {t:"I hanen Ängel",                 mb:"",       c:"#3FB8AF", dark:false, icon:"👼"},
@@ -402,6 +409,13 @@ const sternKnopf = document.getElementById("stern");
 const PLAY  = '<path d="M7 4.5v15l13-7.5z"/>';
 const PAUSE = '<path d="M6.5 4.5h4v15h-4zM13.5 4.5h4v15h-4z"/>';
 
+let sprache = "";
+function dateiFuer(i, endung, code){
+  const f = LIEDER[i].fassungen;
+  const suffix = f ? "-" + (code || sprache || f[0][0]) : "";
+  return slug(LIEDER[i].t) + suffix + endung;
+}
+
 function firebaseUrl(dateiname){
   const bucket = daten.bucket || FIREBASE.bucket;
   if(!bucket) return "";
@@ -414,7 +428,7 @@ function firebaseUrl(dateiname){
 function quelleFuer(i){
   const e = eintrag(i);
   if(e.link) return e.link;
-  const datei = slug(LIEDER[i].t) + ".mp3";
+  const datei = dateiFuer(i, ".mp3");
   return firebaseUrl(datei) || (ORDNER ? ORDNER + "/" + datei : datei);
 }
 
@@ -450,6 +464,8 @@ function zeigen(i){
   notiz.hidden = !lied.notiz;
   sternKnopf.setAttribute("aria-pressed", e.favorit ? "true" : "false");
 
+  sprache = lied.fassungen ? lied.fassungen[0][0] : "";
+  spracheZeichnen();
   textLaden(i);
 
   const q = quelleFuer(i);
@@ -462,6 +478,34 @@ function zeigen(i){
 
   treffer.hidden = false;
   playKnopf.focus({preventScroll:true});
+}
+
+/* Sprachfassungen (z. B. Deutsch / Norsk) */
+const spracheLeiste = document.getElementById("sprachen");
+function spracheZeichnen(){
+  spracheLeiste.textContent = "";
+  const f = LIEDER[aktuell].fassungen;
+  spracheLeiste.hidden = !f;
+  if(!f) return;
+  f.forEach(([code, name]) => {
+    const b = document.createElement("button");
+    b.className = "flach sprache";
+    b.textContent = name;
+    b.setAttribute("aria-pressed", code === sprache ? "true" : "false");
+    b.addEventListener("click", () => spracheWechseln(code));
+    spracheLeiste.appendChild(b);
+  });
+}
+function spracheWechseln(code){
+  if(code === sprache) return;
+  stopp();
+  sprache = code;
+  spracheZeichnen();
+  textLaden(aktuell);
+  const q = quelleFuer(aktuell);
+  spieler.src = q || "";
+  playKnopf.disabled = !q;
+  status.textContent = "";
 }
 
 /* Liedtext: liegt als lieder/<dateiname>.txt neben der MP3 */
@@ -481,7 +525,7 @@ async function textLaden(i){
   textKnopf.hidden = true;
   liedtext.textContent = "";
   try{
-    const datei = slug(LIEDER[i].t) + ".txt";
+    const datei = dateiFuer(i, ".txt");
     const url = (firebaseUrl(datei) || (ORDNER ? ORDNER + "/" + datei : datei));
     const r = await fetch(url);
     if(!r.ok) return;
@@ -566,7 +610,12 @@ function dateilisteBauen(){
   const ul = document.getElementById("dateiliste");
   LIEDER.forEach(l => {
     const li = document.createElement("li");
-    li.innerHTML = "<code>" + slug(l.t) + ".mp3</code> – " + l.t;
+    if(l.fassungen){
+      li.innerHTML = l.fassungen.map(([c, n]) =>
+        "<code>" + slug(l.t) + "-" + c + ".mp3</code> – " + l.t + " (" + n + ")").join("<br>");
+    } else {
+      li.innerHTML = "<code>" + slug(l.t) + ".mp3</code> – " + l.t;
+    }
     ul.appendChild(li);
   });
 }
